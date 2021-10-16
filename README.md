@@ -1,4 +1,4 @@
-# test
+# Vue Invoice App
 
 ## Project setup
 ```
