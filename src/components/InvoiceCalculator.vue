@@ -4,52 +4,47 @@
 
       <div class="fromWrapper">
         <input type="text" @click="$event.target.select()" v-model="newItem.productName">
-        <input type="number" @click="$event.target.select()" v-model.number="newItem.productPrice">
-        <input type="number" @click="$event.target.select()" v-model.number="newItem.productQuantity">
-        <button type="button" @click="addNewItem" @keyup.enter="addNewItem">Add</button>
+        <input type="number" @click="$event.target.select()" min="0" v-model.number="newItem.productPrice">
+        <input type="number" @click="$event.target.select()" min="0" v-model.number="newItem.productQuantity">
+        <button type="button" class="addButton" @click="addNewItem">Add</button>
       </div>
 
-      <div class="page-container">
-        <main class="main-content">
-          <div id="invoice-app">
-            <table class="responsive-table">
-              <thead>
-              <tr>
-                <th><input type="checkbox" @change="selectAll()"></th>
-                <th>Product name</th>
-                <th>Price</th>
-                <th>Quantity</th>
-                <th>Sum</th>
-                <th></th>
-              </tr>
-              </thead>
-              <tr v-for="(item, index) in items" :key="index">
-                <td><input type="checkbox" :checked="item.checked" @change="checkItem(index)"></td>
-                <td><input type="text" v-model="item.description"/></td>
-                <td>
-                  <div class="cell-with-input"><input type="number" min="0" v-model.number="item.price"/></div>
-                </td>
-                <td data-label="Quantity"><input type="number" min="0" v-model.number="item.quantity"/></td>
-                <td data-label="Total">{{ item.price * item.quantity }}</td>
-                <td class="text-right">
-                  <button class="is-danger" @click="deleteItem(index)">Delete item</button>
-                </td>
-              </tr>
-            </table>
-<!--            <button @click="addNewItem">Add item</button>-->
-            <table>
-              <tr>
-                <td colspan="5">Subtotal</td>
-                <td>{{ subTotal }}</td>
-              </tr>
-            </table>
-
-            <button @click="printInvoice">Print Invoice</button>
-            <button @click="deleteAllItems">Delete All</button>
-          </div>
-
-        </main>
-      </div>
+      <main class="main-content">
+        <table class="mainTable">
+          <thead>
+          <tr>
+            <th style="width: 10%"><input type="checkbox" :checked="allDone && items.length > 0" @change="selectAll()"></th>
+            <th style="width: 50%">Product name</th>
+            <th style="width: 10%">Price</th>
+            <th style="width: 10%">Quantity</th>
+            <th style="width: 10%">Sum</th>
+            <th style="width: 10%"></th>
+          </tr>
+          </thead>
+          <tbody>
+          <tr v-for="(item, index) in items" :key="index">
+            <td><input type="checkbox" :checked="item.checked" @change="checkItem(index)"></td>
+            <td>{{ item.description }}</td>
+            <td>
+              <div class="cell-with-input">${{ item.price }}</div>
+            </td>
+            <td data-label="Quantity">{{ item.quantity }}</td>
+            <td data-label="Total">${{ item.price * item.quantity }}</td>
+            <td><button class="deleteButton deleteItem" type="button" v-if="item.checked" @click="removeItem(index)"></button></td>
+          </tr>
+          </tbody>
+          <tfoot>
+          <tr>
+            <td><button type="button" :disabled="!allDone || items.length === 0" @click="removeAll" class="deleteButton">Delete All</button></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td>Total</td>
+            <td>${{ subTotal }}</td>
+          </tr>
+          </tfoot>
+        </table>
+      </main>
     </div>
   </div>
 </template>
@@ -58,13 +53,22 @@
 
 var STORAGE_KEY = "vue-invoice-app";
 var todoStorage = {
-  fetch: function() {
+  fetch: function () {
     var items = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
     todoStorage.uid = items.length;
     return items;
   },
-  save: function(items) {
+  save: function (items) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  }
+};
+
+// visibility filters
+var filters = {
+  active: function(items) {
+    return items.filter(function(item) {
+      return !item.checked;
+    });
   }
 };
 
@@ -79,19 +83,24 @@ export default {
         productPrice: 0,
         productQuantity: 0,
         checked: false
-      },
+      }
     }
   },
   watch: {
     items: {
-      handler: function(items) {
+      handler: function (items) {
         todoStorage.save(items);
       },
       deep: true
     }
   },
   methods: {
-    addNewItem: function() {
+    resetItem() {
+      this.newItem.productName = ''
+      this.newItem.productQuantity = 0
+      this.newItem.productPrice = 0
+    },
+    addNewItem: function () {
       this.items.push(
           {
             id: this.newItem.id++,
@@ -101,34 +110,42 @@ export default {
             checked: false
           }
       )
-      this.newItem.productName = ''
-      this.newItem.productQuantity = ''
-      this.newItem.productPrice = ''
+      this.resetItem()
     },
     checkItem(index) {
       this.items[index].checked = !this.items[index].checked
     },
-    deleteItem(index) {
+    removeItem(index) {
       this.items.splice(index, 1)
     },
-    deleteAllItems() {
+    removeAll() {
       this.items = []
     },
-    printInvoice() {
-      window.print();
-    },
     selectAll() {
-      this.items.forEach(function(item) {
+      this.items.forEach(function (item) {
         item.checked = true;
       });
     }
   },
   computed: {
-    subTotal: function() {
+    subTotal: function () {
       return this.items.reduce(function (accumulator, item) {
         return accumulator + (item.price * item.quantity);
       }, 0);
     },
+    remaining: function() {
+      return filters.active(this.items).length;
+    },
+    allDone: {
+      get: function() {
+        return this.remaining === 0;
+      },
+      set: function(value) {
+        this.items.forEach(function(item) {
+          item.checked = value;
+        });
+      }
+    }
   }
 }
 </script>
